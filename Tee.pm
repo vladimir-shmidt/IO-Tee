@@ -7,7 +7,7 @@ use Symbol;
 use IO::Handle;
 use IO::File;
 use vars qw($VERSION @ISA);
-$VERSION = '0.62';
+$VERSION = '0.63';
 @ISA = 'IO::Handle';
 
 # Constructor -- bless array reference into our class

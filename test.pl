@@ -91,5 +91,6 @@ $t3 and ($t3->autoflush(1), $t3->flush)
     print((($contents eq $expected) ? '' : 'not '), "ok 26\n");
 }
 
+undef $testfile2; close TEST3; undef $t3;
 5 == unlink 'test.1', 'test.2', 'test.3', 'test.4', 'test.5'
     and print "ok 27\n" or print "not ok 27\n";
