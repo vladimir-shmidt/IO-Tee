@@ -1,81 +1,74 @@
 NAME
-
- IO::Tee	An IO::Handle subclass for emulating 'tee' behaviour
+    IO::Tee - Multiplex output to multiple output handles
 
 SYNOPSIS
+        use IO::Tee;
 
-  require IO::Tee;
-
-  # Read from a given handle $ifh while logging to './logfile'
-  my($fh) = IO::Tee->new($ifh, IO::File->new('./logfile', 'w'));
-  if (!$fh) {
-    die $!;
-  }
-
-  my($line);
-  while (defined($line = $fh->getline())) {
-    # Do something here
-    ...
-  }
-  # Write something into a socket while appending to './logfile'
-  $fh = IO::Tee->new($ofh, IO::File->new('./logfile', 'a'));
-  while (!$done) {
-    # Do something here
-    ...
-    $fh->print($output);
-  }
+        $tee = IO::Tee->new($handle1, $handle2);
+        print $tee "foo", "bar";
 
 DESCRIPTION
+    The `IO::Tee' constructor, given a list of output handles, returns a
+    tied handle that can be written to but not read from. When written to
+    (using print or printf), it multiplexes the output to the list of
+    handles originally passed to the constructor. As a shortcut, you can
+    also directly pass a string or an array reference to the constructor, in
+    which case `IO::File::new' is called for you with the specified argument
+    or arguments.
 
-  This module does something very similar to the 'tee'
-  program: All input read from or sent to a given IO handle
-  is copied to another IO handle. Typically all methods are
-  just inherited from IO::Handle. Exceptions are:
-  new The constructor receives two handles as arguments: The
-  first handle which will be used for reading or
-  writing, the second for logging. The constructor
-  returns undef, if either of the handles is undef, so
-  that you can safely do something like the following:
+    The `IO::Tee' class supports certain `IO::Handle' and `IO::File' methods
+    related to output. In particular, the following methods will iterate
+    themselves over all handles associated with the `IO::Tee' object, and
+    return TRUE indicating success if and only if all associated handles
+    returned TRUE indicating success:
 
-    my($fh) = IO::Tee->new(IO::File->new('foo', 'r'),
-                           IO::File->new('bar', 'w'));
-    if (!$fh) {
-        die "Error: $!";
-    }
+    close
+    truncate
+    write
+    syswrite
+    format_write
+    formline
+    fcntl
+    ioctl
+    flush
+    clearerr
+    seek
+    Additionally, the following methods can be used to set (but not
+    retrieve) the current values of output-related state variables on all
+    associated handles:
 
-  Of course the logging handle must be ready for output.
-  The first handle can be used for both reading and
-  writing, but that's probably not too much useful, as
-  you cannot distinguish the output in the logfile.
+    autoflush
+    output_field_separator
+    output_record_separator
+    format_page_number
+    format_lines_per_page
+    format_lines_left
+    format_name
+    format_top_name
+    format_line_break_characters
+    format_formfeed
+EXAMPLE
+        use IO::Tee;
+        use IO::File;
 
-COPYRIGHT AND AUTHOR
+        my $tee = new IO::Tee(\*STDOUT,
+            new IO::File(">tt1.out"), ">tt2.out");
 
-  Copyright (C) 1998, Jochen Wiedmann
-                      Am Eisteich 9
-                      72555 Metzingen
-                      Germany
+        print join(' ', $tee->handles), "\n";
 
-                      Phone: +49 7123 14887
-                      Email: joe@ispsoft.de
+        $tee->output_field_separator("//");
+        for (1..10) { print $tee $_, "\n" }
+        for (1..10) { $tee->print($_, "\n") }
+        $tee->flush;
 
-  This module is free software; you can redistribute it
-  and/or modify it under the terms of the GNU General Public
-  License as published by the Free Software Foundation;
-  either version 2 of the License, or (at your option) any
-  later version.
+AUTHOR
+    Chung-chieh Shan, ken@digitas.harvard.edu
 
-  This module is distributed in the hope that it will be
-  useful, but WITHOUT ANY WARRANTY; without even the implied
-  warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
-  PURPOSE. See the GNU General Public License for more
-  details.
-
-  You should have received a copy of the GNU General Public
-  License along with this module; if not, write to the Free
-  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA
-  02139, USA.
+COPYRIGHT
+    Copyright (c) 1998 Chung-chieh Shan. All rights reserved. This program
+    is free software; you can redistribute it and/or modify it under the
+    same terms as Perl itself.
 
 SEE ALSO
-
-  IO::Handle (3), IO::Seekable (3), tee (1)
+    the perlfunc manpage, the IO::Handle manpage, the IO::File manpage.
 

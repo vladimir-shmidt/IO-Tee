@@ -1,325 +1,269 @@
-# -*- perl -*-
-#
-#   IO::Tee - An IO::Handle subclass for emulation 'tee' behaviour
-#
-#   Copyright (C) 1998, Jochen Wiedmann
-#                       Am Eisteich 9
-#                       72555 Metzingen
-#                       Germany
-#
-#                       Phone: +49 7123 14887
-#                       Email: joe@ispsoft.de
-#
-#
-#   This module is free software; you can redistribute it and/or modify
-#   it under the terms of the GNU General Public License as published by
-#   the Free Software Foundation; either version 2 of the License, or
-#   (at your option) any later version.
-#
-#   This module is distributed in the hope that it will be useful,
-#   but WITHOUT ANY WARRANTY; without even the implied warranty of
-#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#   GNU General Public License for more details.
-#
-#   You should have received a copy of the GNU General Public License
-#   along with this module; if not, write to the Free Software
-#   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
-#
-############################################################################
+package IO::Tee;
 
 require 5.004;
 use strict;
+use Carp;
+use Symbol;
+use IO::Handle;
+use IO::File;
+use vars qw($VERSION @ISA);
+$VERSION = '0.60';
+@ISA = 'IO::Handle';
 
-require IO::Handle;
+# Constructor -- bless array reference into our class
 
-
-package IO::Tee;
-
-$IO::Tee::VERSION = '0.01';
-@IO::Tee::ISA = qw(IO::Handle);
-
-sub new ($$$) {
-    my($class, $tfh, $lfh) = @_;
-    if (!$tfh  ||  !$lfh) {
-	return undef;
-    }
-    my($self) = { 'tfh' => $tfh, 'lfh' => $lfh };
-    bless($self, (ref($class) || $class));
-    $self;
+sub new
+{
+    my $class = shift;
+    my $self = gensym;
+    @{*$self} = map {
+        ! ref($_) ? IO::File->new($_)
+        : ref($_) eq 'ARRAY' ? IO::File->new(@$_)
+        : ref($_) eq 'GLOB' ? bless $_, 'IO::Handle'
+        : $_ or return undef } @_;
+    bless $self, $class;
+    tie *$self, $class, $self;
+    return $self;
 }
 
-sub close ($) {
-    my($self) = shift;
-    my($result) = $self->{'tfh'}->close();
-    $result &= $self->{'lfh'}->close();
-    $result;
+# Return a list of all associated handles
+
+sub handles
+{
+    @{*{$_[0]}};
 }
 
-sub fileno ($) { my($self) = shift; $self->{'tfh'}->fileno(); }
+# Proxy routines for various IO::Handle and IO::File operations
 
-sub getc ($) {
-    my($self) = shift;
-    my($c) = $self->{'tfh'}->getc();
-    if (defined($c)  &&  length($c) > 0  &&  !$self->{'lfh'}->print($c)) {
-	$self->{'tfh'}->ungetc($c);
-	return undef;
-    }
-    $c;
+sub _method_return_success
+{
+    my $method = (caller(1))[3];
+    $method =~ s/.*:://;
+
+    my $self = shift;
+    my $ret = 1;
+    my $fh;
+    foreach $fh (@{*$self}) { undef $ret unless $fh->$method(@_) }
+    return $ret;
 }
 
-sub eof ($) { my($self) = shift; $self->{'tfh'}->eof(); }
+sub close        { _method_return_success(@_) }
+sub truncate     { _method_return_success(@_) }
+sub write        { _method_return_success(@_) }
+sub syswrite     { _method_return_success(@_) }
+sub format_write { _method_return_success(@_) }
+sub fcntl        { _method_return_success(@_) }
+sub ioctl        { _method_return_success(@_) }
+sub flush        { _method_return_success(@_) }
+sub clearerr     { _method_return_success(@_) }
+sub seek         { _method_return_success(@_) }
 
-sub read ($$$;$) {
-    my($self, $scalar, $length, $offset) = @_;
-    my($len) = $self->{'tfh'}->read($scalar, $length, $offset);
-    if ($len  &&  !$self->{'lfh'}->write($scalar, $len, $offset)) {
-	$len = undef;
-    }
-    $len;
+sub formline
+{
+    my $self = shift;
+    my $picture = shift;
+    local($^A) = $^A;
+    local($\) = "";
+    formline($picture, @_);
+
+    my $ret = 1;
+    my $fh;
+    foreach $fh (@{*$self}) { undef $ret unless print $fh $^A }
+    return $ret;
 }
 
-sub truncate ($$) {
-    my($self, $len) = @_;
-    return $self->{'lfh'}->truncate($len);
+sub _state_modify
+{
+    my $method = (caller(1))[3];
+    $method =~ s/.*:://;
+    croak "$method values cannot be retrieved collectively" if @_ <= 1;
+
+    my $self = shift;
+    my $fh;
+    foreach $fh (@{*$self}) { $fh->$method(@_) }
+    # Note that we do not return any "previous value" here
 }
 
-sub stat ($) { my($self) = shift; return $self->{'tfh'}->stat(); }
+sub autoflush                    { _state_modify(@_) }
+sub output_field_separator       { _state_modify(@_) }
+sub output_record_separator      { _state_modify(@_) }
+sub format_page_number           { _state_modify(@_) }
+sub format_lines_per_page        { _state_modify(@_) }
+sub format_lines_left            { _state_modify(@_) }
+sub format_name                  { _state_modify(@_) }
+sub format_top_name              { _state_modify(@_) }
+sub format_line_break_characters { _state_modify(@_) }
+sub format_formfeed              { _state_modify(@_) }
 
-sub print ($@) {
-    my($self) = shift;
-    return ($self->{'tfh'}->print(@_) && $self->{'lfh'}->print(@_));
+# File handle tying interface
+
+sub TIEHANDLE
+{
+    my ($class, $self) = @_;
+    return bless *$self{ARRAY}, $class;
 }
 
-sub printf ($$@) {
-    my($self) = shift;
-    my($format) = shift;
-    return ($self->{'tfh'}->printf($format, @_)
-	    && $self->{'lfh'}->printf($format, @_));
+sub PRINT
+{
+    my $self = shift;
+    my $ret = 1;
+    my $fh;
+    foreach $fh (@$self) { undef $ret unless print $fh @_ }
+    return $ret;
 }
 
-sub sysread ($$$;$) {
-    my($self, $scalar, $length, $offset) = @_;
-    my($len) = $self->{'tfh'}->sysread($scalar, $length, $offset);
-    if ($len  &&  !$self->{'lfh'}->write($scalar, $offset, $len)) {
-	$len = undef;
-    }
-    $len;
+sub PRINTF
+{
+    my $self = shift;
+    my $fmt = shift;
+    my $ret = 1;
+    my $fh;
+    foreach $fh (@$self) { undef $ret unless printf $fh $fmt, @_ }
+    return $ret;
 }
 
-sub syswrite ($$$;$) {
-    my($self, $scalar, $length, $offset) = @_;
-    my($len) = $self->{'tfh'}->syswrite($scalar, $length, $offset);
-    if ($len  &&  !$self->{'lfh'}->write($scalar, $offset, $len)) {
-	$len = undef;
-    }
-    $len;
+# Croak for illegal (non-output) operations on IO::Tee objects
+
+sub _croak_reading
+{
+    my $self = shift;
+    my $class = ref $self;
+    my $method = (caller(1))[3];
+    $method =~ s/.*:://;
+    croak "$class does not support $method";
 }
 
-sub autoflush ($;$) {
-    my($self, $mode) = @_;
-    return ($self->{'tfh'}->autoflush($mode)
-	    && $self->{'tfh'}->autoflush($mode));
-}
+sub READ                   { _croak_reading(@_) }
+sub READLINE               { _croak_reading(@_) }
+sub GETC                   { _croak_reading(@_) }
+sub getc                   { _croak_reading(@_) }
+sub gets                   { _croak_reading(@_) }
+sub getline                { _croak_reading(@_) }
+sub getlines               { _croak_reading(@_) }
+sub read                   { _croak_reading(@_) }
+sub sysread                { _croak_reading(@_) }
+sub stat                   { _croak_reading(@_) }
+sub eof                    { _croak_reading(@_) }
+sub input_record_separator { _croak_reading(@_) }
+sub input_line_number      { _croak_reading(@_) }
 
-sub output_field_separator ($;$) {
-    my($self, $mode) = @_;
-    return ($self->{'tfh'}->output_field_separator($mode)
-	    && $self->{'tfh'}->output_field_separator($mode));
-}
+# Miscellaneous functions
 
-sub output_record_separator ($;$) {
-    my($self, $mode) = @_;
-    return ($self->{'tfh'}->output_record_separator($mode)
-	    && $self->{'tfh'}->output_recordx_separator($mode));
-}
+sub DESTROY { my $self = shift; untie *$self; @{*$self} = () }
 
-sub input_record_separator ($;$) {
-    my($self, $mode) = @_;
-    return $self->{'tfh'}->input_record_separator($mode);
-}
-
-sub input_line_number ($;$) {
-    my($self, $mode) = @_;
-    return $self->{'tfh'}->input_line_number($mode);
-}
-
-sub format_page_number ($;$) {
-    my($self, $mode) = @_;
-    return $self->{'tfh'}->format_page_number($mode);
-}
-
-sub format_lines_per_page ($;$) {
-    my($self, $mode) = @_;
-    return $self->{'tfh'}->format_lines_per_page($mode);
-}
-
-sub format_lines_left ($;$) {
-    my($self, $mode) = @_;
-    return $self->{'tfh'}->format_lines_left($mode);
-}
-
-sub format_name ($;$) {
-    my($self, $mode) = @_;
-    return $self->{'tfh'}->format_name($mode);
-}
-
-sub format_top_name ($;$) {
-    my($self, $mode) = @_;
-    return $self->{'tfh'}->format_top_name($mode);
-}
-
-sub format_line_break_characters ($;$) {
-    my($self, $mode) = @_;
-    return $self->{'tfh'}->format_line_break_characters($mode);
-}
-
-sub format_formfeed ($;$) {
-    my($self, $mode) = @_;
-    return $self->{'tfh'}->format_formfeed($mode);
-}
-
-sub format_write ($;$) {
-    my($self, $mode) = @_;
-    return $self->{'tfh'}->format_writeX($mode);
-}
-
-sub getline ($) {
-    my($self) = shift;
-    my($line) = $self->{'tfh'}->getline();
-    if (defined($line)  &&  !$self->{'lfh'}->print($line)) {
-	$line = undef;
-    }
-    $line;
-}
-
-sub getlines ($) {
-    my($self) = shift;
-    my(@lines) = $self->{'tfh'}->getlines();
-    my($line);
-    foreach $line (@lines) {
-	if (!$self->{'lfh'}->print($line)) {
-	    @lines = ();
-	    last;
-	}
-    }
-    @lines;
-}
-
-sub ungetc($$) {
-    my($self, $c) = @_;
-    undef; # Cannot ungetc from logfile
-}
-
-sub write ($$$$) {
-    my($self, $buf, $length, $offset) = @_;
-    $self->{'tfh'}->write($buf, $length, $offset)
-	&& $self->{'lfh'}->write($buf, $length, $offset);
-}
-
-sub flush ($) {
-    my($self) = shift;
-    $self->{'tfh'}->flush()  &&  $self->{'lfh'}->flush();
-}
-
-sub error ($) {
-    my($self) = shift;
-    $self->{'tfh'}->error()  .  $self->{'lfh'}->error();
-}
-
-sub clearerr ($) {
-    my($self) = shift;
-    $self->{'tfh'}->clearerr();
-    $self->{'lfh'}->clearerr();
-}
-
+sub import { }
 
 1;
-
-
 __END__
 
 =head1 NAME
 
-IO::Tee - An IO::Handle subclass for emulating 'tee' behaviour
+IO::Tee - Multiplex output to multiple output handles
 
 =head1 SYNOPSIS
 
-    require IO::Tee;
+    use IO::Tee;
 
-    # Read from a given handle $ifh while logging to './logfile'
-    my($fh) = IO::Tee->new($ifh, IO::File->new('./logfile', 'w'));
-    if (!$fh) {
-	die $!;
-    }
-    my($line);
-    while (defined($line = $fh->getline())) {
-	# Do something here
-	...
-    }
-
-    # Write something into a socket while appending to './logfile'
-    $fh = IO::Tee->new($ofh, IO::File->new('./logfile', 'a'));
-    while (!$done) {
-        # Do something here
-        ...
-	$fh->print($output);
-    }
+    $tee = IO::Tee->new($handle1, $handle2);
+    print $tee "foo", "bar";
 
 =head1 DESCRIPTION
 
-This module does something very similar to the 'tee' program: All input
-read from or sent to a given IO handle is copied to another IO handle.
-Typically all methods are just inherited from IO::Handle. Exceptions
-are:
+The C<IO::Tee> constructor, given a list of output handles, returns a
+tied handle that can be written to but not read from.  When written to
+(using print or printf), it multiplexes the output to the list of
+handles originally passed to the constructor.  As a shortcut, you can
+also directly pass a string or an array reference to the constructor,
+in which case C<IO::File::new> is called for you with the specified
+argument or arguments.
+
+The C<IO::Tee> class supports certain C<IO::Handle> and C<IO::File>
+methods related to output.  In particular, the following methods will
+iterate themselves over all handles associated with the C<IO::Tee>
+object, and return TRUE indicating success if and only if all associated
+handles returned TRUE indicating success:
 
 =over 4
 
-=item new
+=item close
 
-The constructor receives two handles as arguments: The first handle
-which will be used for reading or writing, the second for logging.
-The constructor returns undef, if either of the handles is undef,
-so that you can safely do something like the following:
+=item truncate
 
-   my($fh) = IO::Tee->new(IO::File->new('foo', 'r'),
-			  IO::File->new('bar', 'w'));
-   if (!$fh) {
-       die "Error: $!";
-   }
+=item write
 
-Of course the logging handle must be ready for output. The first handle
-can be used for both reading and writing, but that's probably not too
-much useful, as you cannot distinguish the output in the logfile.
+=item syswrite
 
+=item format_write
+
+=item formline
+
+=item fcntl
+
+=item ioctl
+
+=item flush
+
+=item clearerr
+
+=item seek
 
 =back
 
-=head1 COPYRIGHT AND AUTHOR
+Additionally, the following methods can be used to set (but not retrieve)
+the current values of output-related state variables on all associated
+handles:
 
-    Copyright (C) 1998, Jochen Wiedmann
-                        Am Eisteich 9
-                        72555 Metzingen
-                        Germany
+=over 4
 
-                        Phone: +49 7123 14887
-                        Email: joe@ispsoft.de
+=item autoflush
 
+=item output_field_separator
 
-This module is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2 of the License, or
-(at your option) any later version.
+=item output_record_separator
 
-This module is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+=item format_page_number
 
-You should have received a copy of the GNU General Public License
-along with this module; if not, write to the Free Software
-Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+=item format_lines_per_page
+
+=item format_lines_left
+
+=item format_name
+
+=item format_top_name
+
+=item format_line_break_characters
+
+=item format_formfeed
+
+=back
+
+=head1 EXAMPLE
+
+    use IO::Tee;
+    use IO::File;
+
+    my $tee = new IO::Tee(\*STDOUT,
+        new IO::File(">tt1.out"), ">tt2.out");
+
+    print join(' ', $tee->handles), "\n";
+
+    $tee->output_field_separator("//");
+    for (1..10) { print $tee $_, "\n" }
+    for (1..10) { $tee->print($_, "\n") }
+    $tee->flush;
+
+=head1 AUTHOR
+
+Chung-chieh Shan, ken@digitas.harvard.edu
+
+=head1 COPYRIGHT
+
+Copyright (c) 1998 Chung-chieh Shan.  All rights reserved.
+This program is free software; you can redistribute it and/or
+modify it under the same terms as Perl itself.
 
 =head1 SEE ALSO
 
-    L<IO::Handle (3)>, L<IO::Seekable (3)>, L<tee (1)>
+L<perlfunc>, L<IO::Handle>, L<IO::File>.
 
+=cut
