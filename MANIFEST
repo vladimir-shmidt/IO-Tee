@@ -1,0 +1,6 @@
+MANIFEST		This file
+README
+Makefile.PL		Makefile generator
+Tee.pm			The IO::Tee module
+t/base.t		Base test (loads the module and exits)
+t/tee.t			True test

@@ -1,0 +1,81 @@
+NAME
+
+ IO::Tee	An IO::Handle subclass for emulating 'tee' behaviour
+
+SYNOPSIS
+
+  require IO::Tee;
+
+  # Read from a given handle $ifh while logging to './logfile'
+  my($fh) = IO::Tee->new($ifh, IO::File->new('./logfile', 'w'));
+  if (!$fh) {
+    die $!;
+  }
+
+  my($line);
+  while (defined($line = $fh->getline())) {
+    # Do something here
+    ...
+  }
+  # Write something into a socket while appending to './logfile'
+  $fh = IO::Tee->new($ofh, IO::File->new('./logfile', 'a'));
+  while (!$done) {
+    # Do something here
+    ...
+    $fh->print($output);
+  }
+
+DESCRIPTION
+
+  This module does something very similar to the 'tee'
+  program: All input read from or sent to a given IO handle
+  is copied to another IO handle. Typically all methods are
+  just inherited from IO::Handle. Exceptions are:
+  new The constructor receives two handles as arguments: The
+  first handle which will be used for reading or
+  writing, the second for logging. The constructor
+  returns undef, if either of the handles is undef, so
+  that you can safely do something like the following:
+
+    my($fh) = IO::Tee->new(IO::File->new('foo', 'r'),
+                           IO::File->new('bar', 'w'));
+    if (!$fh) {
+        die "Error: $!";
+    }
+
+  Of course the logging handle must be ready for output.
+  The first handle can be used for both reading and
+  writing, but that's probably not too much useful, as
+  you cannot distinguish the output in the logfile.
+
+COPYRIGHT AND AUTHOR
+
+  Copyright (C) 1998, Jochen Wiedmann
+                      Am Eisteich 9
+                      72555 Metzingen
+                      Germany
+
+                      Phone: +49 7123 14887
+                      Email: joe@ispsoft.de
+
+  This module is free software; you can redistribute it
+  and/or modify it under the terms of the GNU General Public
+  License as published by the Free Software Foundation;
+  either version 2 of the License, or (at your option) any
+  later version.
+
+  This module is distributed in the hope that it will be
+  useful, but WITHOUT ANY WARRANTY; without even the implied
+  warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+  PURPOSE. See the GNU General Public License for more
+  details.
+
+  You should have received a copy of the GNU General Public
+  License along with this module; if not, write to the Free
+  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA
+  02139, USA.
+
+SEE ALSO
+
+  IO::Handle (3), IO::Seekable (3), tee (1)
+
