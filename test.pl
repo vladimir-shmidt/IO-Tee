@@ -2,6 +2,7 @@
 # `make test'. After `make install' it should work as `perl test.pl'
 
 use strict;
+BEGIN { $^W = 1 }
 
 ######################### We start with some black magic to print on failure.
 
@@ -21,6 +22,7 @@ open TEST3, '>test.3' and $testfile1
 
 {
     my $tee = IO::Tee->new(\*STDOUT, $testfile1);
+    undef $testfile1;
     print  $tee  "ok 3\n"       and print "ok 4\n"  or print "not ok 3\nnot ok 4\n";
     printf $tee  "ok %d\n", 5   and print "ok 6\n"  or print "not ok 5\nnot ok 6\n";
     $tee->print ("ok 7\n"     ) and print "ok 8\n"  or print "not ok 7\nnot ok 8\n";
@@ -30,7 +32,6 @@ open TEST3, '>test.3' and $testfile1
 {
     my $t1 = IO::Tee->new(['>test.2'], \*TEST3);
     my $t2 = IO::Tee->new(\*STDOUT, $t1);
-    undef $testfile1;
     $testfile1 = IO::File->new('<test.1');
     if (join('', <$testfile1>) eq "ok 3\nok 5\nok 7\nok 9\n")
     {

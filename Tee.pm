@@ -7,7 +7,7 @@ use Symbol;
 use IO::Handle;
 use IO::File;
 use vars qw($VERSION @ISA);
-$VERSION = '0.61';
+$VERSION = '0.62';
 @ISA = 'IO::Handle';
 
 # Constructor -- bless array reference into our class
@@ -188,15 +188,10 @@ sub sysread
 {
     my $self = shift;
     my $bytes = ${*$self}[0]->sysread(@_);
-    $bytes and (\@{*$self})->_multiplex_input(substr($_[0], $_[2], $bytes));
+    $bytes and (\@{*$self})->
+        _multiplex_input(substr($_[0], $_[2] || 0, $bytes));
     $bytes;
 }
-
-# Miscellaneous functions
-
-sub DESTROY { my $self = shift; untie *$self; @{*$self} = () }
-
-sub import { }
 
 1;
 __END__
