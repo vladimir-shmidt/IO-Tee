@@ -56,7 +56,6 @@ EXAMPLE
 
         print join(' ', $tee->handles), "\n";
 
-        $tee->output_field_separator("//");
         for (1..10) { print $tee $_, "\n" }
         for (1..10) { $tee->print($_, "\n") }
         $tee->flush;
@@ -65,9 +64,9 @@ AUTHOR
     Chung-chieh Shan, ken@digitas.harvard.edu
 
 COPYRIGHT
-    Copyright (c) 1998 Chung-chieh Shan. All rights reserved. This program
-    is free software; you can redistribute it and/or modify it under the
-    same terms as Perl itself.
+    Copyright (c) 1998-2001 Chung-chieh Shan. All rights reserved. This
+    program is free software; you can redistribute it and/or modify it
+    under the same terms as Perl itself.
 
 SEE ALSO
     the perlfunc manpage, the IO::Handle manpage, the IO::File manpage.

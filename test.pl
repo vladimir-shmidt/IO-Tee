@@ -70,7 +70,8 @@ $t3 and ($t3->autoflush(1), $t3->flush)
     print(($char eq 'o' ? '' : 'not '), "ok 19\n");
     my $line1 = $t7->getline();
     print(($line1 eq "k 3\n" ? '' : 'not '), "ok 20\n");
-    print(($t7->input_record_separator(' ') eq "\n" ? '' : 'not '), "ok 21\n");
+    #print(($t7->input_record_separator(' ') eq "\n" ? '' : 'not '), "ok 21\n");
+    print((ref($t7)->input_record_separator(' ') eq "\n" ? '' : 'not '), "ok 21\n");
     my $line2 = $t7->getline();
     print(($line2 eq 'ok ' ? '' : 'not '), "ok 22\n");
     my $block;

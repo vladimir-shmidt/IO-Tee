@@ -7,7 +7,7 @@ use Symbol;
 use IO::Handle;
 use IO::File;
 use vars qw($VERSION @ISA);
-$VERSION = '0.63';
+$VERSION = '0.64';
 @ISA = 'IO::Handle';
 
 # Constructor -- bless array reference into our class
@@ -77,7 +77,14 @@ sub _state_modify
     croak "$method values cannot be retrieved collectively" if @_ <= 1;
 
     my $self = shift;
-    foreach my $fh (@{*$self}) { $fh->$method(@_) }
+    if (ref $self)
+    {
+        foreach my $fh (@{*$self}) { $fh->$method(@_) }
+    }
+    else
+    {
+        IO::Handle->$method(@_);
+    }
     # Note that we do not return any "previous value" here
 }
 
@@ -95,7 +102,8 @@ sub format_formfeed              { _state_modify(@_) }
 sub input_record_separator
 {
     my $self = shift;
-    my $ret = ${*$self}[0]->input_record_separator(@_);
+    my $ret = (ref $self ? ${*$self}[0] : 'IO::Handle')
+        ->input_record_separator(@_);
     $ret; # This works around an apparent bug in Perl 5.004_04
 }
 
@@ -191,6 +199,12 @@ sub sysread
     $bytes and (\@{*$self})->
         _multiplex_input(substr($_[0], $_[2] || 0, $bytes));
     $bytes;
+}
+
+sub EOF
+{
+    my $self = shift;
+    return $self->[0]->eof;
 }
 
 1;
@@ -340,7 +354,6 @@ subsequent output multiplexing fails.
 
     print join(' ', $tee->handles), "\n";
 
-    $tee->output_field_separator("//");
     for (1..10) { print $tee $_, "\n" }
     for (1..10) { $tee->print($_, "\n") }
     $tee->flush;
@@ -355,7 +368,7 @@ Chung-chieh Shan, ken@digitas.harvard.edu
 
 =head1 COPYRIGHT
 
-Copyright (c) 1998 Chung-chieh Shan.  All rights reserved.
+Copyright (c) 1998-2001 Chung-chieh Shan.  All rights reserved.
 This program is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
 
