@@ -6,7 +6,7 @@ use strict;
 ######################### We start with some black magic to print on failure.
 
 my $loaded;
-BEGIN { $| = 1; print "1..16\n"; }
+BEGIN { $| = 1; print "1..27\n"; }
 END {print "not ok 1\n" unless $loaded;}
 use IO::Tee;
 use IO::File;
@@ -57,5 +57,38 @@ my $t3 = IO::Tee->new(\*STDOUT, ['>test.4']);
 $t3 and ($t3->autoflush(1), $t3->flush)
     and print "ok 15\n" or print "not ok 15\n";
 
-4 == unlink 'test.1', 'test.2', 'test.3', 'test.4'
-    and print "ok 16\n" or print "not ok 16\n";
+{
+    my $t5 = IO::File->new('<test.1');
+    print(($t5 ? '' : 'not '), "ok 16\n");
+    my $t6 = IO::File->new('>test.5');
+    print(($t6 ? '' : 'not '), "ok 17\n");
+    my $t7 = IO::Tee->new($t5, $t6);
+    print(($t7 ? '' : 'not '), "ok 18\n");
+
+    my $char = $t7->getc();
+    print(($char eq 'o' ? '' : 'not '), "ok 19\n");
+    my $line1 = $t7->getline();
+    print(($line1 eq "k 3\n" ? '' : 'not '), "ok 20\n");
+    print(($t7->input_record_separator(' ') eq "\n" ? '' : 'not '), "ok 21\n");
+    my $line2 = $t7->getline();
+    print(($line2 eq 'ok ' ? '' : 'not '), "ok 22\n");
+    my $block;
+    my $result = $t7->read($block, 4000);
+    print(($block eq "5\nok 7\nok 9\n" ? '' : 'not '), "ok 23\n");
+    print(($t7->eof ? '' : 'not '), "ok 24\n");
+    $t7->close;
+    my $expected = $char . $line1 . $line2 . $block;
+
+    my $t8 = IO::File->new('<test.5');
+    my $contents = join('', $t8->getlines);
+    print((($contents eq $expected) ? '' : 'not '), "ok 25\n");
+
+    $t8 = IO::File->new('<test.5');
+    $t7 = IO::Tee->new($t8);
+    $contents = '';
+    $result = $t7->sysread($contents, 4000);
+    print((($contents eq $expected) ? '' : 'not '), "ok 26\n");
+}
+
+5 == unlink 'test.1', 'test.2', 'test.3', 'test.4', 'test.5'
+    and print "ok 27\n" or print "not ok 27\n";

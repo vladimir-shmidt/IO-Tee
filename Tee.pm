@@ -7,7 +7,7 @@ use Symbol;
 use IO::Handle;
 use IO::File;
 use vars qw($VERSION @ISA);
-$VERSION = '0.60';
+$VERSION = '0.61';
 @ISA = 'IO::Handle';
 
 # Constructor -- bless array reference into our class
@@ -42,8 +42,7 @@ sub _method_return_success
 
     my $self = shift;
     my $ret = 1;
-    my $fh;
-    foreach $fh (@{*$self}) { undef $ret unless $fh->$method(@_) }
+    foreach my $fh (@{*$self}) { undef $ret unless $fh->$method(@_) }
     return $ret;
 }
 
@@ -67,8 +66,7 @@ sub formline
     formline($picture, @_);
 
     my $ret = 1;
-    my $fh;
-    foreach $fh (@{*$self}) { undef $ret unless print $fh $^A }
+    foreach my $fh (@{*$self}) { undef $ret unless print $fh $^A }
     return $ret;
 }
 
@@ -79,8 +77,7 @@ sub _state_modify
     croak "$method values cannot be retrieved collectively" if @_ <= 1;
 
     my $self = shift;
-    my $fh;
-    foreach $fh (@{*$self}) { $fh->$method(@_) }
+    foreach my $fh (@{*$self}) { $fh->$method(@_) }
     # Note that we do not return any "previous value" here
 }
 
@@ -95,6 +92,20 @@ sub format_top_name              { _state_modify(@_) }
 sub format_line_break_characters { _state_modify(@_) }
 sub format_formfeed              { _state_modify(@_) }
 
+sub input_record_separator
+{
+    my $self = shift;
+    my $ret = ${*$self}[0]->input_record_separator(@_);
+    $ret; # This works around an apparent bug in Perl 5.004_04
+}
+
+sub input_line_number
+{
+    my $self = shift;
+    my $ret = ${*$self}[0]->input_line_number(@_);
+    $ret; # This works around an apparent bug in Perl 5.004_04
+}
+
 # File handle tying interface
 
 sub TIEHANDLE
@@ -107,8 +118,7 @@ sub PRINT
 {
     my $self = shift;
     my $ret = 1;
-    my $fh;
-    foreach $fh (@$self) { undef $ret unless print $fh @_ }
+    foreach my $fh (@$self) { undef $ret unless print $fh @_ }
     return $ret;
 }
 
@@ -117,35 +127,70 @@ sub PRINTF
     my $self = shift;
     my $fmt = shift;
     my $ret = 1;
-    my $fh;
-    foreach $fh (@$self) { undef $ret unless printf $fh $fmt, @_ }
+    foreach my $fh (@$self) { undef $ret unless printf $fh $fmt, @_ }
     return $ret;
 }
 
-# Croak for illegal (non-output) operations on IO::Tee objects
-
-sub _croak_reading
+sub _multiplex_input
 {
-    my $self = shift;
-    my $class = ref $self;
-    my $method = (caller(1))[3];
-    $method =~ s/.*:://;
-    croak "$class does not support $method";
+    my ($self, $input) = @_;
+    my $ret = 1;
+    if (length $input)
+    {
+        for (my $i = 1; $i < @$self; ++$i)
+        {
+            undef $ret unless print {$self->[$i]} $input;
+        }
+    }
+    $ret;
 }
 
-sub READ                   { _croak_reading(@_) }
-sub READLINE               { _croak_reading(@_) }
-sub GETC                   { _croak_reading(@_) }
-sub getc                   { _croak_reading(@_) }
-sub gets                   { _croak_reading(@_) }
-sub getline                { _croak_reading(@_) }
-sub getlines               { _croak_reading(@_) }
-sub read                   { _croak_reading(@_) }
-sub sysread                { _croak_reading(@_) }
-sub stat                   { _croak_reading(@_) }
-sub eof                    { _croak_reading(@_) }
-sub input_record_separator { _croak_reading(@_) }
-sub input_line_number      { _croak_reading(@_) }
+sub READ
+{
+    my $self = shift;
+    my $bytes = $self->[0]->read(@_);
+    $bytes and $self->_multiplex_input(substr($_[0], $_[2], $bytes));
+    $bytes;
+}
+
+sub READLINE
+{
+    my $self = shift;
+    my $infh = $self->[0];
+    if (wantarray)
+    {
+        my @data;
+        my $data;
+        while (defined($data = <$infh>) and length($data))
+        {
+            push @data, $data;
+            $self->_multiplex_input($data);
+        }
+        @data;
+    }
+    else
+    {
+        my $data = <$infh>;
+        defined $data and $self->_multiplex_input($data);
+        $data;
+    }
+}
+
+sub GETC
+{
+    my $self = shift;
+    my $data = getc($self->[0]);
+    defined $data and $self->_multiplex_input($data);
+    $data;
+}
+
+sub sysread
+{
+    my $self = shift;
+    my $bytes = ${*$self}[0]->sysread(@_);
+    $bytes and (\@{*$self})->_multiplex_input(substr($_[0], $_[2], $bytes));
+    $bytes;
+}
 
 # Miscellaneous functions
 
@@ -166,22 +211,36 @@ IO::Tee - Multiplex output to multiple output handles
 
     $tee = IO::Tee->new($handle1, $handle2);
     print $tee "foo", "bar";
+    my $input = <$tee>;
 
 =head1 DESCRIPTION
 
-The C<IO::Tee> constructor, given a list of output handles, returns a
-tied handle that can be written to but not read from.  When written to
-(using print or printf), it multiplexes the output to the list of
-handles originally passed to the constructor.  As a shortcut, you can
-also directly pass a string or an array reference to the constructor,
-in which case C<IO::File::new> is called for you with the specified
-argument or arguments.
+C<IO::Tee> objects can be used to multiplex input and output in two
+different ways.  The first way is to multiplex output to zero or more
+output handles.  The C<IO::Tee> constructor, given a list of output
+handles, returns a tied handle that can be written to.  When written
+to (using print or printf), the C<IO::Tee> object multiplexes the
+output to the list of handles originally passed to the constructor.
+As a shortcut, you can also directly pass a string or an array
+reference to the constructor, in which case C<IO::File::new> is called
+for you with the specified argument or arguments.
+
+The second way is to multiplex input from one input handle to zero or
+more output handles as it is being read.  The C<IO::Tee> constructor,
+given an input handle followed by a list of output handles, returns a
+tied handle that can be read from as well as written to.  When written
+to, the C<IO::Tee> object multiplexes the output to all handles passed
+to the constructor, as described in the previous paragraph.  When read
+from, the C<IO::Tee> object reads from the input handle given as the
+first argument to the C<IO::Tee> constructor, then writes any data
+read to the output handles given as the remaining arguments to the
+constructor.
 
 The C<IO::Tee> class supports certain C<IO::Handle> and C<IO::File>
-methods related to output.  In particular, the following methods will
-iterate themselves over all handles associated with the C<IO::Tee>
-object, and return TRUE indicating success if and only if all associated
-handles returned TRUE indicating success:
+methods related to input and output.  In particular, the following
+methods will iterate themselves over all handles associated with the
+C<IO::Tee> object, and return TRUE indicating success if and only if
+all associated handles returned TRUE indicating success:
 
 =over 4
 
@@ -209,8 +268,30 @@ handles returned TRUE indicating success:
 
 =back
 
-Additionally, the following methods can be used to set (but not retrieve)
-the current values of output-related state variables on all associated
+The following methods perform input multiplexing as described above:
+
+=over 4
+
+=item read
+
+=item sysread
+
+=item readline
+
+=item getc
+
+=item gets
+
+=item eof
+
+=item getline
+
+=item getlines
+
+=back
+
+The following methods can be used to set (but not retrieve) the
+current values of output-related state variables on all associated
 handles:
 
 =over 4
@@ -237,6 +318,23 @@ handles:
 
 =back
 
+The following methods are directly passed on to the input handle given
+as the first argument to the C<IO::Tee> constructor:
+
+=over 4
+
+=item input_record_separator
+
+=item input_line_number
+
+=back
+
+Note that the return value of input multiplexing methods (such as
+C<print>) is always the return value of the input action, not the
+return value of subsequent output actions.  In particular, no error is
+indicated by the return value if the input action itself succeeds but
+subsequent output multiplexing fails.
+
 =head1 EXAMPLE
 
     use IO::Tee;
@@ -251,6 +349,10 @@ handles:
     for (1..10) { print $tee $_, "\n" }
     for (1..10) { $tee->print($_, "\n") }
     $tee->flush;
+
+    $tee = new IO::Tee('</etc/passwd', \*STDOUT);
+    my @lines = <$tee>;
+    print scalar(@lines);
 
 =head1 AUTHOR
 

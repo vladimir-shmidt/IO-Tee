@@ -12,3 +12,5 @@ Revision history for Perl module IO::Tee.
           object is an array ref which is the same array ref as
           is obtained by casting the glob ref to an array ref.
 
+0.61  1998-04-11 22:42:26
+        - Added handling of input handles. (Thanks to Jochen Wiedmann)
