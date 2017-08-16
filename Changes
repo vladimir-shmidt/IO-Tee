@@ -1,6 +1,7 @@
 Revision history for Perl module IO::Tee.
 
 0.65 2017-08-16 NEILB
+    - Moved Tee.pm to lib/IO/Tee.pm
     - Changed the order of entries in Changes to be newest to oldest.
 
 0.64  2001-03-10
