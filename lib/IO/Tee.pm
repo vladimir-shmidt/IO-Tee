@@ -2,13 +2,16 @@ package IO::Tee;
 
 require 5.004;
 use strict;
+use warnings;
+
+use parent 'IO::Handle';
+
 use Carp;
 use Symbol;
 use IO::Handle;
 use IO::File;
-use vars qw($VERSION @ISA);
-$VERSION = '0.65';
-@ISA = 'IO::Handle';
+
+our $VERSION = '0.65';
 
 # Constructor -- bless array reference into our class
 
