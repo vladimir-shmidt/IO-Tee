@@ -1,6 +1,7 @@
 Revision history for Perl module IO::Tee.
 
 0.65 2017-08-16 NEILB
+    - Switched to Dist::Zilla
     - Changed README to a short overview of module, how to install, etc
     - Moved original testsuite test.pl to t/original.t
     - Moved Tee.pm to lib/IO/Tee.pm
