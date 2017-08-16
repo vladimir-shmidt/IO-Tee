@@ -3,6 +3,7 @@ Revision history for Perl module IO::Tee.
 0.65 2017-08-16 NEILB
     - Added "use warnings", changed "use vars ..." to our $VERSION, etc.
     - Switched to Dist::Zilla
+    - Link to the github repo in the pod doc.
     - Changed README to a short overview of module, how to install, etc
     - Moved original testsuite test.pl to t/original.t
     - Moved Tee.pm to lib/IO/Tee.pm

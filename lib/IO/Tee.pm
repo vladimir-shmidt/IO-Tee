@@ -365,6 +365,10 @@ subsequent output multiplexing fails.
     my @lines = <$tee>;
     print scalar(@lines);
 
+=head1 REPOSITORY
+
+L<https://github.com/neilb/IO-Tee>
+
 =head1 AUTHOR
 
 Chung-chieh Shan, ken@digitas.harvard.edu
