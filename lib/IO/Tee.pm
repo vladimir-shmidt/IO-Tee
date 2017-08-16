@@ -1,6 +1,6 @@
 package IO::Tee;
 
-require 5.004;
+require 5.006;
 use strict;
 use warnings;
 
@@ -369,9 +369,11 @@ subsequent output multiplexing fails.
 
 Chung-chieh Shan, ken@digitas.harvard.edu
 
+As of August 2017, now being maintained by Neil Bowers.
+
 =head1 COPYRIGHT
 
-Copyright (c) 1998-2001 Chung-chieh Shan.  All rights reserved.
+Copyright (c) 1998-2017 Chung-chieh Shan.  All rights reserved.
 This program is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
 
