@@ -89,6 +89,8 @@ $t3 and ($t3->autoflush(1), $t3->flush)
     $t7 = IO::Tee->new($t8);
     $contents = '';
     $result = $t7->sysread($contents, 4000);
+    # on operating systems other than unix expect different line endings
+    $contents =~ s{\cM\cJ|\cM}{\n}xmsg;
     print((($contents eq $expected) ? '' : 'not '), "ok 26\n");
 }
 
